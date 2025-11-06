@@ -1,79 +1,49 @@
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from tortoise import fields
-from tortoise.models import Model
-from tortoise.contrib.fastapi import register_tortoise
-from passlib.hash import bcrypt
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import os
-from dotenv import load_dotenv
+import psycopg2
 
-load_dotenv()
 app = FastAPI()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-class usuario(Model):
-    id = fields.IntField(pk=True)
-    name = fields.CharField(max_length=100)
-    email = fields.CharField(max_length=100, unique=True)
-    phone = fields.CharField(max_length=20)
-    password_hash = fields.CharField(max_length=128)
+# Modelo de dados
+class Livro(BaseModel):
+    titulo: str
+    autor: str
+    ano: str
 
-    def verify_password(self, password: str) -> bool:
-        return bcrypt.verify(password, self.password_hash)
-
-class autor(Model):
-    id = fields.IntField(pk=True)
-    name = fields.CharField(max_length=100)
-
-class livro(Model):
-    id = fields.IntField(pk=True)
-    title = fields.CharField(max_length=200)
-    authors = fields.ManyToManyField('models.autor', related_name='books')
-    user = fields.ForeignKeyField('models.User', related_name='books')
-
-class cadastrarUsuario(BaseModel):
-    nome: str
-    email: str
-    numero: str
-    senha: str
-
-class cadastrarLivro(BaseModel):
-    title: str
-    authors: list[str]
-
-@app.post("/cadastro")
-async def register(user: cadastrarUsuario):
-    user_obj = await usuario.create(
-        name=user.name,
-        email=user.email,
-        phone=user.phone,
-        password_hash=bcrypt.hash(user.password)
-    )
-    return {"message": "User registered successfully", "user_id": user_obj.id}
-
-@app.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = await usuario.get_or_none(email=form_data.username)
-    if not user or not user.verify_password(form_data.password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-    return {"access_token": user.email, "token_type": "bearer"}
-
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    user = await usuario.get_or_none(email=token)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid authentication")
-    return user
-
-@app.post("/books")
-async def add_book(book: cadastrarLivro, current_user: usuario = Depends(get_current_user)):
-    book_obj = await livro.create(title=book.title, author=book.author, user=current_user)
-    return {"message": "Book added successfully", "book_id": book_obj.id}
-
-register_tortoise(
-    app,
-    db_url=os.getenv("DATABASE_URL"),
-    modules={"models": ["__main__"]},
-    generate_schemas=True,
-    add_exception_handlers=True,
+# Conexão com PostgreSQL
+conn = psycopg2.connect(
+    dbname="postgres",
+    user="postgres",
+    password="C0rr3t1vO",
+    host="localhost",
+    port="5432"
 )
+cursor = conn.cursor()
+
+# Criar tabela
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS livros (
+        id SERIAL PRIMARY KEY,
+        titulo VARCHAR(255),
+        autor VARCHAR(255),
+        ano VARCHAR(4)
+    )
+""")
+conn.commit()
+
+@app.post("/livros")
+def cadastrar_livro(livro: Livro):
+    cursor.execute("INSERT INTO livros (titulo, autor, ano) VALUES (%s, %s, %s)",
+                   (livro.titulo, livro.autor, livro.ano))
+    conn.commit()
+    return {"mensagem": "Livro cadastrado com sucesso"}
+
+@app.get("/livros")
+def listar_livros():
+    cursor.execute("SELECT titulo, autor, ano FROM livros")
+    livros = cursor.fetchall()
+    return [{"titulo": l[0], "autor": l[1], "ano": l[2]} for l in livros]
+
+# Fechar conexão ao encerrar
+cursor.close()
+conn.close()
