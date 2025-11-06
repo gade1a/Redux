@@ -1,3 +1,4 @@
+import uvicorn
 from fastapi import FastAPI
 from tortoise.contrib.fastapi import RegisterTortoise
 from tortoise import fields, models
@@ -45,4 +46,5 @@ async def cadastrar_livro(l: LivroIn):
 async def listar_livros():
     itens = await Livro.all().values("titulo", "autor", "ano")
 
-    return itens
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8003, reload=True)
