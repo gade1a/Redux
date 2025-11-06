@@ -33,15 +33,16 @@ async def lifespan(app: FastAPI):
         add_exception_handlers=True,
     )
     yield
-    # O fechamento da conexão é tratado pelo RegisterTortoise
 
 app = FastAPI(lifespan=lifespan)
 
 @app.post("/livros")
 async def cadastrar_livro(l: LivroIn):
-    novo = await Livro.create(**l.dict())
+    novo = await Livro.create(**l.model_dump())
     return {"id": novo.id, "mensagem": "Cadastrado com sucesso"}
 
 @app.get("/livros")
 async def listar_livros():
     itens = await Livro.all().values("titulo", "autor", "ano")
+
+    return itens

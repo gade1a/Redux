@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 
-API_URL = "http://localhost:8000"
+API_URL = "http://localhost:5432"
 
 def cadastrar_livro():
     titulo = entry_titulo.get()
